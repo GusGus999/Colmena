@@ -1,5 +1,5 @@
 //Acustica -
-//Peso
+//Peso -
 //Co2 -
 //Fotos 
 //Temperatura -
@@ -17,6 +17,7 @@
 #include <Adafruit_BME280.h>
 #include <driver/i2s.h>
 #include "arduinoFFT.h"
+#include "HX711.h"
 
 const char* ssid = "Pichishouse_EXT";
 const char* password = "Pichi1970";
@@ -33,6 +34,8 @@ const char* password = "Pichi1970";
 #define I2S_SD  42
 #define I2S_PORT I2S_NUM_0
 #define SEALEVELPRESSURE_HPA (1013.25)
+#define HX711_DT 1
+#define HX711_SCK 2
 
 const uint16_t muestras = 1024;           
 const double frecuencia_muestreo = 16000;  
@@ -45,6 +48,7 @@ ArduinoFFT<double> FFT = ArduinoFFT<double>(vReal, vImag, muestras, frecuencia_m
 Adafruit_SCD30 scd30;
 Adafruit_BME280 bme;
 AsyncWebServer server(80);
+HX711 bascula;
 
 // Variables para almacenar la última lectura
 float tempActual = 0.0;
@@ -53,6 +57,7 @@ float co2Actual = 0.0;
 float altitudActual = 0.0;
 float frecActual = 0;
 float pesoActual = 0;
+float factor_calibracion = -22580.0;
 
 int32_t muestra_audio = 0;
 size_t bytes_leidos = 0;
@@ -175,7 +180,7 @@ void setup() {
   }
   Serial.println("SCD30 OK!");
 
-  //Iniciando bme
+  //BME280
   unsigned status = bme.begin(0x76); 
   if (!status) {
     status = bme.begin(0x77); // 0x76
@@ -212,6 +217,12 @@ void setup() {
   i2s_set_pin(I2S_PORT, &pin_config);
   
   Serial.println("INMP441 OK!");
+
+  // Inicializar y calibrar HX711
+  bascula.begin(HX711_DT, HX711_SCK);
+  bascula.set_scale(factor_calibracion);
+  bascula.tare();
+  Serial.println("HX711 OK!");
 
   // Configurar Servidor Asíncrono
   // Ruta principal (Servir página HTML)
@@ -286,6 +297,11 @@ void loop() {
   }
 
   altitudActual = bme.readAltitude(SEALEVELPRESSURE_HPA);
+
+  // Leer peso del HX711
+  if (bascula.is_ready()) {
+    pesoActual = bascula.get_units(1); // Realiza una lectura de la báscula
+  }
 
   // Recolectar un paquetes de sonido
   for (int i = 0; i < muestras; i++) {
