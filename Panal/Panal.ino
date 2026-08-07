@@ -52,6 +52,7 @@ float humActual = 0.0;
 float co2Actual = 0.0;
 float altitudActual = 0.0;
 float frecActual = 0;
+float pesoActual = 0;
 
 int32_t muestra_audio = 0;
 size_t bytes_leidos = 0;
@@ -99,9 +100,14 @@ const char index_html[] PROGMEM = R"rawliteral(
       <div class="unit">m s.n.m.</div>
     </div>
     <div class="card frec">
-      <div class="label"Frecuencia</div>
+      <div class="label">Frecuencia</div>
       <div class="value" id="frec">--</div>
       <div class="unit">Hz</div>
+    </div>
+    <div class="card peso">
+      <div class="label">Peso</div>
+      <div class="value" id="peso">--</div>
+      <div class="unit">Kg</div>
     </div>
   </div>
 <script>
@@ -113,7 +119,8 @@ const char index_html[] PROGMEM = R"rawliteral(
         document.getElementById("temp").innerText = data.temperatura.toFixed(1);
         document.getElementById("hum").innerText = data.humedad.toFixed(1);
         document.getElementById("alt").innerText = data.altitud.toFixed(1);
-        document.getElementById("frec").innerText = data.frecuencia.toFixed(1);
+        document.getElementById("frec").innerText = Math.round(data.frecuencia);
+        document.getElementById("peso").innerText = data.peso.toFixed(2);
       })
       .catch(err => console.error("Error obteniendo datos: ", err));
   }
@@ -132,6 +139,8 @@ void setup() {
     Serial.println(F("Fallo OLED"));
     for(;;);
   }
+  Serial.println("OLED OK!");
+
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
@@ -164,6 +173,7 @@ void setup() {
     Serial.println("¡Error con SCD30!");
     while (1) { delay(10); }
   }
+  Serial.println("SCD30 OK!");
 
   //Iniciando bme
   unsigned status = bme.begin(0x76); 
@@ -174,6 +184,7 @@ void setup() {
       while (1) { delay(10); }
     }
   }
+  Serial.println("BME280 OK!");
 
   // Configuración del protocolo I2S para el micrófono
   const i2s_config_t i2s_config = {
@@ -200,7 +211,7 @@ void setup() {
   i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
   i2s_set_pin(I2S_PORT, &pin_config);
   
-  Serial.println("Micrófono INMP441 listo. Escuchando...");
+  Serial.println("INMP441 OK!");
 
   // Configurar Servidor Asíncrono
   // Ruta principal (Servir página HTML)
@@ -213,7 +224,10 @@ void setup() {
     String json = "{";
     json += "\"co2\":" + String(co2Actual, 0) + ",";
     json += "\"temperatura\":" + String(tempActual, 1) + ",";
-    json += "\"humedad\":" + String(humActual, 1);
+    json += "\"humedad\":" + String(humActual, 1) + ",";
+    json += "\"altitud\":" + String(altitudActual, 1) + ",";
+    json += "\"frecuencia\":" + String(frecActual, 0) + ",";
+    json += "\"peso\":" + String(pesoActual, 2);
     json += "}";
     request->send(200, "application/json", json);
   });
@@ -227,7 +241,15 @@ void imprimirPantalla() {
 
       display.setTextSize(2);
       display.setCursor(0, 0);
-      display.print("Ambiente");
+      display.print(tempActual, 1); 
+      display.setTextSize(1);
+      display.print("C");
+
+      display.setTextSize(2);
+      display.setCursor(64, 0);
+      display.print(humActual, 1);
+      display.setTextSize(1);
+      display.print("%");
 
       display.setTextSize(1);
       display.setCursor(0, 16);
@@ -237,24 +259,19 @@ void imprimirPantalla() {
       display.print(" ppm");
 
       display.setCursor(0, 26);
-      display.print("Temp: ");
-      display.print(tempActual, 1); 
-      display.print(" C");
-
-      display.setCursor(0, 36);
-      display.print("Hum:  ");
-      display.print(humActual, 1); 
-      display.print(" %");
-
-      display.setCursor(0, 46);
       display.print("Alt:  ");
       display.print(altitudActual, 1);
       display.println(" m");
 
-      display.setCursor(0, 56);
+      display.setCursor(0, 36);
       display.print("Frec: ");
-      display.print(frecActual, 1);
+      display.print(frecActual);
       display.println(" Hz");
+
+      display.setCursor(0, 46);
+      display.print("Peso: ");
+      display.print(pesoActual);
+      display.println(" Kg");
 
       display.display();
 }
