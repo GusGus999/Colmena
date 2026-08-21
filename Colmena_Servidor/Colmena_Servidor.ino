@@ -71,65 +71,75 @@ void setup() {
 
 void dibujarDashboardFijo() {
   tft.fillScreen(ILI9341_BLACK);
-  
+
   // Encabezado
   tft.fillRect(0, 0, 240, 45, ILI9341_NAVY);
-  tft.setTextColor(ILI9341_YELLOW);
+  tft.setTextColor(ILI9341_YELLOW, ILI9341_NAVY);
   tft.setTextSize(2);
-  tft.setCursor(10, 8);
+  tft.setCursor(10, 12);
   tft.print("Estacion Apicola");
 
   // Mostrar IP
-  tft.setTextColor(ILI9341_WHITE);
+  tft.setTextColor(ILI9341_WHITE, ILI9341_NAVY);
   tft.setTextSize(1);
-  tft.setCursor(10, 28);
+  tft.setCursor(10, 32);
   tft.print("IP: ");
   tft.print(WiFi.localIP());
 
+  // Etiquetas de datos
   tft.setTextSize(2);
-  tft.setTextColor(ILI9341_LIGHTGREY);
-  
-  tft.setCursor(10, 60);  tft.print("Temperatura:");
-  tft.setCursor(10, 100); tft.print("Humedad:");
-  tft.setCursor(10, 140); tft.print("Co2:");
-  tft.setCursor(10, 180); tft.print("Masa:");
-  tft.setCursor(10, 220); tft.print("Frecuencia:");
-  tft.setCursor(10, 260); tft.print("Altitud:");
+  tft.setTextColor(ILI9341_LIGHTGREY, ILI9341_BLACK);
+
+  tft.setCursor(10, 70);  tft.print("Temperatura:");
+  tft.setCursor(10, 110); tft.print("Humedad:");
+  tft.setCursor(10, 150); tft.print("Co2:");
+  tft.setCursor(10, 190); tft.print("Masa:");
+  tft.setCursor(10, 230); tft.print("Frecuencia:");
+  tft.setCursor(10, 270); tft.print("Altitud:");
 }
 
 void actualizarDatosTFT(String jsonString) {
-  // Configurar memoria para parsear el JSON
   StaticJsonDocument<256> doc;
   DeserializationError error = deserializeJson(doc, jsonString);
 
   if (!error) {
-    tft.fillRect(90, 60, 140, 20, ILI9341_BLACK);
-    tft.fillRect(90, 100, 140, 20, ILI9341_BLACK);
-    tft.fillRect(90, 140, 140, 20, ILI9341_BLACK);
-    tft.fillRect(90, 180, 140, 20, ILI9341_BLACK);
-    tft.fillRect(90, 220, 140, 20, ILI9341_BLACK);
-    tft.fillRect(90, 260, 140, 20, ILI9341_BLACK);
-
-    tft.setTextColor(ILI9341_WHITE);
     tft.setTextSize(2);
-    
-    tft.setCursor(90, 60);
-    tft.printf("%.1fC", (float)doc["temperatura"]);
-    
-    tft.setCursor(90, 100);
-    tft.printf("%.1f%%", (float)doc["humedad"]);
-    
-    tft.setCursor(90, 140);
+
+    // Temperatura
+    tft.fillRect(150, 70, 100, 20, ILI9341_BLACK);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.setCursor(155, 70);
+    tft.printf("%.1f C", (float)doc["temperatura"]);
+
+    // Humedad
+    tft.fillRect(120, 110, 100, 20, ILI9341_BLACK);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.setCursor(120, 110);
+    tft.printf("%.1f %%", (float)doc["humedad"]);
+
+    // CO2
+    tft.fillRect(140, 150, 100, 20, ILI9341_BLACK);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.setCursor(80, 150);
     tft.printf("%d ppm", (int)doc["co2"]);
-    
-    tft.setCursor(90, 180);
-    tft.printf("%.2fKg", (float)doc["peso"]);
-    
-    tft.setCursor(90, 220);
+
+    // Masa (peso)
+    tft.fillRect(140, 190, 100, 20, ILI9341_BLACK);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.setCursor(80, 190);
+    tft.printf("%.2f Kg", (float)doc["peso"]);
+
+    // Frecuencia
+    tft.fillRect(140, 230, 100, 20, ILI9341_BLACK);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.setCursor(150, 230);
     tft.printf("%d Hz", (int)doc["frecuencia"]);
-    
-    tft.setCursor(90, 260);
-    tft.printf("%.1fm", (float)doc["altitud"]);
+
+    // Altitud
+    tft.fillRect(140, 270, 100, 20, ILI9341_BLACK);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.setCursor(120, 270);
+    tft.printf("%.1f m", (float)doc["altitud"]);
   }
 }
 
