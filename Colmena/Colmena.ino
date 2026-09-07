@@ -1,13 +1,3 @@
-//Acustica -
-//Peso -
-//Co2 -
-//Fotos 
-//Temperatura -
-//Temperatura Relativa 
-//Humedad -
-//Altura -
-//LoRa -
-
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -32,12 +22,12 @@
 #define I2C_SCL_PIN 20
 #define HX711_DT 1
 #define HX711_SCK 2
-#define PIN_SCK  18   
-#define PIN_MISO 17   
-#define PIN_MOSI 16   
-#define PIN_NSS   5
-#define PIN_RST  6   
-#define PIN_DIO0 7   
+#define SPI_SCK  18   
+#define SPI_MISO 17   
+#define SPI_MOSI 16   
+#define LORA_NSS   5
+#define LORA_RST  6   
+#define LORA_DIO0 7   
 
 const uint16_t muestras = 1024;           
 const double frecuencia_muestreo = 16000;  
@@ -67,7 +57,7 @@ void setup() {
   Serial.begin(115200);
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  SPI.begin(PIN_SCK, PIN_MISO, PIN_MOSI, PIN_NSS);
+  SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, LORA_NSS);
 
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("Fallo OLED"));
@@ -134,7 +124,7 @@ void setup() {
   Serial.println("HX711 OK!");
 
   // Inicializar LoRa
-  LoRa.setPins(PIN_NSS, PIN_RST, PIN_DIO0);
+  LoRa.setPins(LORA_NSS, LORA_RST, LORA_DIO0);
   if (!LoRa.begin(433E6)) {
     Serial.println("Error LoRa");
     while (1);

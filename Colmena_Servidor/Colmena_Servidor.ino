@@ -6,11 +6,13 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include "credentials.h"
 
-const char* ssid = "Pichishouse_EXT";
-const char* password = "Pichi1970";
-//const char* ssid = "TP-Link_7D88";
-//const char* password = "19663043";
+unsigned long ultimoEnvio = 0;
+const unsigned long INTERVALO_MINIMO = 6000; 
+long ultimaLecturaId = -1;
 
 AsyncWebServer server(80);
 
@@ -143,6 +145,82 @@ void actualizarDatosTFT(String jsonString) {
   }
 }
 
+void enviarExtra(String variable, String valor, String unidad) {
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.begin(client, API_URL_EXTRA);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-device-uid", DEVICE_UID);
+  http.addHeader("x-api-key", API_KEY);
+
+  StaticJsonDocument<200> doc;
+  doc["lectura_iot_id"] = ultimaLecturaId;
+  doc["variable"] = variable;
+  doc["valor"] = valor;
+  doc["unidad"] = unidad;
+  doc["tipo_dato"] = "numerico";
+
+  String payload;
+  serializeJson(doc, payload);
+
+  int codigoExtra = http.POST(payload);
+  Serial.print("Extra ");
+  Serial.print(variable);
+  Serial.print(" -> HTTP ");
+  Serial.println(codigoExtra);
+
+  http.end();
+}
+
+void enviarAPlataforma(JsonDocument& doc) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (millis() - ultimoEnvio < INTERVALO_MINIMO) return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.begin(client, API_URL);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-device-uid", DEVICE_UID);
+  http.addHeader("x-api-key", API_KEY);
+
+  StaticJsonDocument<256> envio;
+  envio["temperatura"] = doc["temperatura"];
+  envio["humedad"]     = doc["humedad"];
+  envio["peso"]        = doc["peso"];
+  envio["origen_comunicacion"] = "radiofrecuencia";
+
+  String payload;
+  serializeJson(envio, payload);
+
+  int codigo = http.POST(payload);
+  Serial.print("Lectura principal -> HTTP ");
+  Serial.println(codigo);
+
+  if (codigo == 201) {
+    String respuesta = http.getString();
+    StaticJsonDocument<128> respDoc;
+    deserializeJson(respDoc, respuesta);
+    ultimaLecturaId = respDoc["id"] | -1;
+    ultimoEnvio = millis();
+    http.end();
+
+    // Las variables sin columna fija van a lecturas_iot_extra,
+    // ligadas a la lectura principal recien creada.
+    if (ultimaLecturaId > 0) {
+      enviarExtra("co2", doc["co2"].as<String>(), "ppm");
+      enviarExtra("altitud", doc["altitud"].as<String>(), "m");
+      enviarExtra("frecuencia", doc["frecuencia"].as<String>(), "Hz");
+    }
+  } else {
+    Serial.println(http.getString());
+    http.end();
+  }
+}
+
 void loop() {
   int tamanoPaquete = LoRa.parsePacket();
   
@@ -156,5 +234,10 @@ void loop() {
     Serial.println("Recibido: " + ultimoPaqueteJSON);
     
     actualizarDatosTFT(ultimoPaqueteJSON);
+
+    StaticJsonDocument<256> docLectura;
+    if (!deserializeJson(docLectura, ultimoPaqueteJSON)) {
+      enviarAPlataforma(docLectura);
+    }
   }
 }
