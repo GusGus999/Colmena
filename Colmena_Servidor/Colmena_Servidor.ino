@@ -26,8 +26,7 @@ AsyncWebServer server(80);
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
 // Variable global que almacena el JSON asíncrono
-String ultimoPaqueteJSON = "{\"co2\":0,\"temperatura\":0,\"humedad\":0,\"altitud\":0,\"frecuencia\":0,\"peso\":0}";
-
+String ultimoPaqueteJSON = "{\"fecha\":\"--\",\"co2\":0,\"temperatura\":0,\"humedad\":0,\"altitud\":0,\"frecuencia\":0,\"peso\":0}";
 void setup() {
   Serial.begin(115200);
 
@@ -98,6 +97,8 @@ void dibujarDashboardFijo() {
   tft.setCursor(10, 190); tft.print("Masa:");
   tft.setCursor(10, 230); tft.print("Frecuencia:");
   tft.setCursor(10, 270); tft.print("Altitud:");
+
+  tft.setCursor(10, 305); tft.print("Act:");
 }
 
 void actualizarDatosTFT(String jsonString) {
@@ -142,6 +143,17 @@ void actualizarDatosTFT(String jsonString) {
     tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
     tft.setCursor(120, 270);
     tft.printf("%.1f m", (float)doc["altitud"]);
+
+    // NUEVA LÍNEA: Dibuja un rectángulo negro para limpiar el espacio donde se imprimirá la fecha.
+    tft.fillRect(70, 305, 170, 20, ILI9341_BLACK); 
+    // NUEVA LÍNEA: Reducimos un poco el tamaño del texto porque la cadena de fecha (ej. 2026-09-08 14:30) es larga.
+    tft.setTextSize(1); 
+    // NUEVA LÍNEA: Define el color blanco para la impresión.
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK); 
+    // NUEVA LÍNEA: Coloca el cursor junto a la etiqueta "Act:".
+    tft.setCursor(70, 310); 
+    // NUEVA LÍNEA: Extrae el valor de texto "fecha" del JSON y lo imprime en pantalla.
+    tft.print(doc["fecha"].as<String>());
   }
 }
 
@@ -192,6 +204,7 @@ void enviarAPlataforma(JsonDocument& doc) {
   envio["humedad"]     = doc["humedad"];
   envio["peso"]        = doc["peso"];
   envio["origen_comunicacion"] = "radiofrecuencia";
+  envio["fecha"]       = doc["fecha"];
 
   String payload;
   serializeJson(envio, payload);

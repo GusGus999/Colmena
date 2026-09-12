@@ -8,6 +8,7 @@
 #include "HX711.h"
 #include <SPI.h>
 #include <LoRa.h>
+#include <RTClib.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -40,6 +41,7 @@ ArduinoFFT<double> FFT = ArduinoFFT<double>(vReal, vImag, muestras, frecuencia_m
 Adafruit_SCD30 scd30;
 Adafruit_BME280 bme;
 HX711 bascula;
+RTC_DS3231 rtc;
 
 // Variables para almacenar la última lectura
 float tempActual = 0.0;
@@ -71,6 +73,18 @@ void setup() {
   display.display();
   
   Serial.println("OLED OK!");
+
+  // Inicializar RTC DS3231
+  if (!rtc.begin()) {
+    Serial.println("No se encontró el módulo RTC");
+    while (1);
+  }
+  Serial.println("RTC OK!");
+
+  // Si el RTC perdió la batería, ajusta a la hora de compilación
+  if (rtc.lostPower()) {
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
 
   //SCD30
   if (!scd30.begin()) {
@@ -217,8 +231,12 @@ void loop() {
 
   imprimirPantalla();
 
+  DateTime ahora = rtc.now();
+  String fechaHora = String(ahora.year()) + "-" + String(ahora.month()) + "-" + String(ahora.day()) + " " + String(ahora.hour()) + ":" + String(ahora.minute()) + ":" + String(ahora.second());
+
   // Construir y Enviar JSON por LoRa
   String json = "{";
+  json += "\"fecha\":\"" + fechaHora + "\",";
   json += "\"co2\":" + String(co2Actual, 0) + ",";
   json += "\"temperatura\":" + String(tempActual, 1) + ",";
   json += "\"humedad\":" + String(humActual, 1) + ",";
