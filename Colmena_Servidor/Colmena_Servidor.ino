@@ -27,6 +27,7 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
 // Variable global que almacena el JSON asíncrono
 String ultimoPaqueteJSON = "{\"fecha\":\"--\",\"co2\":0,\"temperatura\":0,\"humedad\":0,\"altitud\":0,\"frecuencia\":0,\"peso\":0}";
+
 void setup() {
   Serial.begin(115200);
 
@@ -144,15 +145,15 @@ void actualizarDatosTFT(String jsonString) {
     tft.setCursor(120, 270);
     tft.printf("%.1f m", (float)doc["altitud"]);
 
-    // NUEVA LÍNEA: Dibuja un rectángulo negro para limpiar el espacio donde se imprimirá la fecha.
+    // Dibuja un rectángulo negro para limpiar el espacio donde se imprimirá la fecha.
     tft.fillRect(70, 305, 170, 20, ILI9341_BLACK); 
-    // NUEVA LÍNEA: Reducimos un poco el tamaño del texto porque la cadena de fecha (ej. 2026-09-08 14:30) es larga.
+    // Reducimos un poco el tamaño del texto porque la cadena de fecha es larga.
     tft.setTextSize(1); 
-    // NUEVA LÍNEA: Define el color blanco para la impresión.
+    // Define el color blanco para la impresión.
     tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK); 
-    // NUEVA LÍNEA: Coloca el cursor junto a la etiqueta "Act:".
+    // Coloca el cursor junto a la etiqueta "Act:".
     tft.setCursor(70, 310); 
-    // NUEVA LÍNEA: Extrae el valor de texto "fecha" del JSON y lo imprime en pantalla.
+    // Extrae el valor de texto "fecha" del JSON y lo imprime en pantalla.
     tft.print(doc["fecha"].as<String>());
   }
 }
@@ -199,12 +200,16 @@ void enviarAPlataforma(JsonDocument& doc) {
   http.addHeader("x-device-uid", DEVICE_UID);
   http.addHeader("x-api-key", API_KEY);
 
+  // NOTA: "fecha" NO se envía al backend a propósito.
+  // El DTO de /api/iot/lecturas no lo acepta (rechaza con 400
+  // cualquier campo no declarado). La fecha solo se usa arriba
+  // para mostrarse en la pantalla TFT; el servidor pone su propia
+  // marca de tiempo automáticamente al recibir la lectura.
   StaticJsonDocument<256> envio;
   envio["temperatura"] = doc["temperatura"];
   envio["humedad"]     = doc["humedad"];
   envio["peso"]        = doc["peso"];
   envio["origen_comunicacion"] = "radiofrecuencia";
-  envio["fecha"]       = doc["fecha"];
 
   String payload;
   serializeJson(envio, payload);
