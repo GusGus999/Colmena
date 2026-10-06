@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <Preferences.h> 
 #include "credentials.h"
 
 unsigned long ultimoEnvio = 0;
@@ -15,6 +16,7 @@ const unsigned long INTERVALO_MINIMO = 6000;
 long ultimaLecturaId = -1;
 
 AsyncWebServer server(80);
+Preferences preferences; // Objeto para almacenar SSID y clave
 
 #define LORA_DIO0 2
 #define LORA_SS 5
@@ -27,28 +29,149 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
 // Variable global que almacena el JSON asíncrono
 String ultimoPaqueteJSON = "{\"fecha\":\"--\",\"co2\":0,\"temperatura\":0,\"humedad\":0,\"altitud\":0,\"frecuencia\":0,\"peso\":0}";
+String htmlOpcionesRedes = "";
+
+// Función para escanear redes, mostrarlas en la TFT y levantar el portal de configuración
+void iniciarPortalConfiguracion() {
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setTextColor(ILI9341_YELLOW);
+  tft.setTextSize(2);
+  tft.setCursor(10, 10);
+  tft.println("Buscando redes...");
+
+  WiFi.mode(WIFI_MODE_APSTA);
+  WiFi.disconnect();
+  delay(100);
+
+  int n = WiFi.scanNetworks();
+
+  // Mostrar lista de redes en pantalla TFT (Orientación vertical 240x320)
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setCursor(5, 5);
+  tft.setTextColor(ILI9341_GREEN);
+  tft.setTextSize(2);
+  tft.println("Redes Detectadas:");
+  tft.setTextSize(1);
+  tft.setTextColor(ILI9341_WHITE);
+
+  htmlOpcionesRedes = "";
+  int y = 30;
+
+  for (int i = 0; i < n && i < 8; ++i) { // Muestra hasta 8 redes en pantalla
+    String ssidRed = WiFi.SSID(i);
+    if (ssidRed.length() > 22) ssidRed = ssidRed.substring(0, 19) + "...";
+    String redInfo = String(i + 1) + ". " + ssidRed + " (" + String(WiFi.RSSI(i)) + "dBm)";
+    tft.setCursor(5, y);
+    tft.println(redInfo);
+    y += 14;
+
+    htmlOpcionesRedes += "<option value='" + WiFi.SSID(i) + "'>" + WiFi.SSID(i) + "</option>";
+  }
+
+  // Iniciar red propia temporal
+  WiFi.softAP("ESP32_Config_WiFi");
+
+  // Instrucciones en TFT
+  tft.setTextColor(ILI9341_CYAN);
+  tft.setCursor(5, y + 10);
+  tft.println("--------------------------------");
+  tft.println("1. Conectate al WiFi:");
+  tft.setTextColor(ILI9341_YELLOW);
+  tft.println("   SSID: ESP32_Config_WiFi");
+  tft.setTextColor(ILI9341_CYAN);
+  tft.println("2. Abre en navegador:");
+  tft.setTextColor(ILI9341_YELLOW);
+  tft.println("   http://192.168.4.1");
+
+  // Web Endpoint para mostrar el formulario HTML
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
+                  "<style>body{font-family:Arial;margin:20px;} select,input{width:100%;padding:10px;margin:8px 0;box-sizing:border-box;}</style></head>"
+                  "<body><h2>Configurar WiFi Estacion</h2>"
+                  "<form action='/guardar' method='POST'>"
+                  "<label>Selecciona tu Red:</label>"
+                  "<select name='ssid'>" + htmlOpcionesRedes + "</select>"
+                  "<label>Contrasena:</label>"
+                  "<input type='password' name='pass' placeholder='Clave Wi-Fi'>"
+                  "<input type='submit' value='Guardar y Conectar' style='background:#04AA6D;color:white;border:none;border-radius:4px;'>"
+                  "</form></body></html>";
+    request->send(200, "text/html", html);
+  });
+
+  // Web Endpoint para recibir y guardar las credenciales ingresadas
+  server.on("/guardar", HTTP_POST, [](AsyncWebServerRequest *request){
+    String reqSSID = "";
+    String reqPass = "";
+    if (request->hasParam("ssid", true)) reqSSID = request->getParam("ssid", true)->value();
+    if (request->hasParam("pass", true)) reqPass = request->getParam("pass", true)->value();
+
+    if (reqSSID.length() > 0) {
+      preferences.putString("ssid", reqSSID);
+      preferences.putString("pass", reqPass);
+      request->send(200, "text/html", "<h2>Datos guardados correctamente. Reiniciando servidor...</h2>");
+      delay(2000);
+      ESP.restart(); // Reinicia el ESP32 para conectarse a la nueva red
+    } else {
+      request->send(400, "text/html", "Error: Selecciona una red valida.");
+    }
+  });
+
+  server.begin();
+
+  // Pausa la ejecución aquí hasta que la persona guarde los datos y el ESP32 se reinicie
+  while (true) {
+    delay(500);
+  }
+}
 
 void setup() {
   Serial.begin(115200);
 
   tft.begin();
-  tft.setRotation(0); // 0 = Orientación vertical
+  tft.setRotation(0); // 0 = Orientación vertical (240x320)
   tft.fillScreen(ILI9341_BLACK);
   tft.setTextColor(ILI9341_WHITE);
   tft.setTextSize(2);
   tft.setCursor(10, 10);
   tft.println("Iniciando Sistema..");
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  tft.setCursor(10, 40);
-  tft.print("Conectando WiFi...");
-  
-  while (WiFi.status() != WL_CONNECTED) { 
-    delay(500); 
-    Serial.print("."); 
+  // Leer credenciales guardadas en la memoria interna
+  preferences.begin("wifi-config", false);
+  String ssidGuardado = preferences.getString("ssid", "");
+  String passGuardado = preferences.getString("pass", "");
+
+  bool conectado = false;
+
+  if (ssidGuardado.length() > 0) {
+    tft.setCursor(10, 40);
+    tft.println("Conectando WiFi:");
+    tft.setTextColor(ILI9341_YELLOW);
+    tft.setTextSize(1);
+    tft.setCursor(10, 65);
+    tft.println(ssidGuardado);
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setTextSize(2);
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssidGuardado.c_str(), passGuardado.c_str());
+
+    int intentos = 0;
+    while (WiFi.status() != WL_CONNECTED && intentos < 15) {
+      delay(500);
+      Serial.print(".");
+      intentos++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      conectado = true;
+    }
   }
-  
+
+  // Si no hay credenciales guardadas o falló la conexión, iniciar portal de escaneo
+  if (!conectado) {
+    iniciarPortalConfiguracion();
+  }
+
   server.on("/api/datos", HTTP_GET, [](AsyncWebServerRequest *request){
     AsyncWebServerResponse *response = request->beginResponse(200, "application/json", ultimoPaqueteJSON);
     response->addHeader("Access-Control-Allow-Origin", "*");
@@ -56,7 +179,7 @@ void setup() {
   });
   server.begin();
 
-  // Iniciar Bus SPI compartido
+  // Iniciar Bus SPI compartido y Módulo LoRa
   SPI.begin(18, 19, 23, LORA_SS); 
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
   
@@ -147,13 +270,9 @@ void actualizarDatosTFT(String jsonString) {
 
     // Dibuja un rectángulo negro para limpiar el espacio donde se imprimirá la fecha.
     tft.fillRect(70, 305, 170, 20, ILI9341_BLACK); 
-    // Reducimos un poco el tamaño del texto porque la cadena de fecha es larga.
     tft.setTextSize(1); 
-    // Define el color blanco para la impresión.
     tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK); 
-    // Coloca el cursor junto a la etiqueta "Act:".
     tft.setCursor(70, 310); 
-    // Extrae el valor de texto "fecha" del JSON y lo imprime en pantalla.
     tft.print(doc["fecha"].as<String>());
   }
 }
@@ -200,11 +319,6 @@ void enviarAPlataforma(JsonDocument& doc) {
   http.addHeader("x-device-uid", DEVICE_UID);
   http.addHeader("x-api-key", API_KEY);
 
-  // NOTA: "fecha" NO se envía al backend a propósito.
-  // El DTO de /api/iot/lecturas no lo acepta (rechaza con 400
-  // cualquier campo no declarado). La fecha solo se usa arriba
-  // para mostrarse en la pantalla TFT; el servidor pone su propia
-  // marca de tiempo automáticamente al recibir la lectura.
   StaticJsonDocument<256> envio;
   envio["temperatura"] = doc["temperatura"];
   envio["humedad"]     = doc["humedad"];
@@ -226,8 +340,6 @@ void enviarAPlataforma(JsonDocument& doc) {
     ultimoEnvio = millis();
     http.end();
 
-    // Las variables sin columna fija van a lecturas_iot_extra,
-    // ligadas a la lectura principal recien creada.
     if (ultimaLecturaId > 0) {
       enviarExtra("co2", doc["co2"].as<String>(), "ppm");
       enviarExtra("altitud", doc["altitud"].as<String>(), "m");
